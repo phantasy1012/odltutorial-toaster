@@ -1,5 +1,6 @@
 package org.opendaylight.yang.gen.v1.urn.opendaylight.params.xml.ns.yang.toaster.impl.rev160321;
 
+import org.opendaylight.controller.md.sal.binding.api.DataBroker;
 import org.opendaylight.toaster.impl.ToasterProvider;
 
 public class ToasterModule extends org.opendaylight.yang.gen.v1.urn.opendaylight.params.xml.ns.yang.toaster.impl.rev160321.AbstractToasterModule {
@@ -18,9 +19,24 @@ public class ToasterModule extends org.opendaylight.yang.gen.v1.urn.opendaylight
 
     @Override
     public java.lang.AutoCloseable createInstance() {
-    	ToasterProvider provider = new ToasterProvider();
+    	final ToasterProvider provider = new ToasterProvider();
+    	
+    	DataBroker dataBrokerService = getDataBrokerDependency();
+    	provider.setDataProvider(dataBrokerService);
+    	
     	getBrokerDependency().registerProvider(provider);
-    	return provider;
+//    	return provider;
+    	// Wrap toaster as AutoCloseable and close registrations to md-sal at
+        // close(). The close method is where you would generally clean up thread pools
+        // etc.
+        final class AutoCloseableToaster implements AutoCloseable {
+
+            @Override
+            public void close() throws Exception {
+            	provider.close();
+            }
+        }
+        return new AutoCloseableToaster();
     }
 
 }

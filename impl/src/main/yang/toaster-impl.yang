@@ -22,6 +22,7 @@ module toaster-impl {
     augment "/config:modules/config:module/config:configuration" {
         case toaster {
             when "/config:modules/config:module/config:type = 'toaster'";
+            
             container broker {
                 uses config:service-ref {
                     refine type {
@@ -30,6 +31,16 @@ module toaster-impl {
                     }
                 }
             }
+            
+            //wires in the data-broker service 
+            container data-broker {
+                uses config:service-ref {
+                    refine type {
+                        mandatory false;
+                        config:required-identity md-sal-binding:binding-async-data-broker;
+                    }
+                }
+            } 
         }
     }
 }
