@@ -13,6 +13,6 @@ public class ToasterModuleFactoryTest {
     @Test
     public void testFactoryConstructor() {
         // ensure no exceptions on construction
-//        new ToasterModuleFactory();
+        new ToasterModuleFactory();
     }
 }
