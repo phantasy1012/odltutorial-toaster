@@ -3,7 +3,9 @@ module toaster {
     namespace "urn:opendaylight:params:xml:ns:yang:toaster";
     prefix "toaster";
 
-    revision "2015-01-05" {
+    revision "2016-03-20" {
         description "Initial revision of toaster model";
     }
+    
+    
 }

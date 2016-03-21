@@ -9,7 +9,7 @@ module toaster-impl {
     description
         "Service definition for toaster project";
 
-    revision "2014-12-10" {
+    revision "2016-03-21" {
         description
             "Initial revision";
     }
