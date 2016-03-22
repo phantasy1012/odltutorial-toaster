@@ -80,6 +80,15 @@ module toaster {
         description
           "This variable indicates the current state of  the toaster.";
       }
+      
+      leaf darknessFactor {
+	       type uint32;
+	       config true;
+	       default 1000;
+	       description
+	         "The darkness factor. Basically, the number of ms to multiple the doneness value by.";
+	     }
+      
     }  // container toaster
     
     
@@ -123,4 +132,5 @@ module toaster {
           A 'resource-denied' error will be returned 
           if the toaster service is disabled.";
    }  // rpc cancel-toast
+   
 }  // module toaster

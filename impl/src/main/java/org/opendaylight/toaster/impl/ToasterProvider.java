@@ -23,6 +23,8 @@ import org.opendaylight.controller.md.sal.binding.api.DataBroker;
 import org.opendaylight.controller.md.sal.binding.api.DataChangeListener;
 import org.opendaylight.controller.md.sal.binding.api.ReadWriteTransaction;
 import org.opendaylight.controller.md.sal.binding.api.WriteTransaction;
+import org.opendaylight.controller.md.sal.common.api.data.AsyncDataBroker.DataChangeScope;
+import org.opendaylight.controller.md.sal.common.api.data.AsyncDataChangeEvent;
 import org.opendaylight.controller.md.sal.common.api.data.LogicalDatastoreType;
 import org.opendaylight.controller.md.sal.common.api.data.OptimisticLockFailedException;
 import org.opendaylight.controller.md.sal.common.api.data.TransactionCommitFailedException;
@@ -39,6 +41,7 @@ import org.opendaylight.yang.gen.v1.urn.opendaylight.params.xml.ns.yang.toaster.
 import org.opendaylight.yang.gen.v1.urn.opendaylight.params.xml.ns.yang.toaster.rev160320.ToasterService;
 //Yangtools methods to manipulate RPC DTOs
 import org.opendaylight.yangtools.concepts.ListenerRegistration;
+import org.opendaylight.yangtools.yang.binding.DataObject;
 import org.opendaylight.yangtools.yang.binding.InstanceIdentifier;
 import org.opendaylight.yangtools.yang.common.RpcError;
 import org.opendaylight.yangtools.yang.common.RpcError.ErrorType;
@@ -57,7 +60,7 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 
-public class ToasterProvider implements BindingAwareProvider, ToasterService, AutoCloseable {
+public class ToasterProvider implements BindingAwareProvider, ToasterService, AutoCloseable, DataChangeListener {
 	private static final Logger LOG = LoggerFactory
 			.getLogger(ToasterProvider.class);
 
@@ -141,8 +144,15 @@ public class ToasterProvider implements BindingAwareProvider, ToasterService, Au
 		// Register the RPC Service
 		rpcReg = session.addRpcImplementation(ToasterService.class, this);
 
+		// Register the DataChangeListener for Toaster's configuration subtree
+        dcReg = dataService.registerDataChangeListener( LogicalDatastoreType.CONFIGURATION,
+                                                        TOASTER_IID,
+                                                        this,
+                                                        DataChangeScope.SUBTREE );
+        
 		// Initialize operational and default config data in MD-SAL data store
 		initToasterOperational();
+		initToasterConfiguration();
 
 		LOG.info("onSessionInitiated: initialization done");
 	}
@@ -161,6 +171,7 @@ public class ToasterProvider implements BindingAwareProvider, ToasterService, Au
 		LOG.info("cancelToast");
 		Future<?> current = currentMakeToastTask.getAndSet(null);
 		if (current != null) {
+			LOG.info("cancel " + current);
 			current.cancel(true);
 		}
 
@@ -286,7 +297,6 @@ public class ToasterProvider implements BindingAwareProvider, ToasterService, Au
 		final ReadWriteTransaction tx = dataService.newReadWriteTransaction();
 		ListenableFuture<Optional<Toaster>> readFuture = tx.read(
 				LogicalDatastoreType.OPERATIONAL, TOASTER_IID);
-
 		final ListenableFuture<Void> commitFuture = Futures.transform(
 				readFuture, new AsyncFunction<Optional<Toaster>, Void>() {
 
@@ -343,12 +353,14 @@ public class ToasterProvider implements BindingAwareProvider, ToasterService, Au
 			@Override
 			public void onSuccess(final Void result) {
 				// OK to make toast
+				LOG.debug("onSuccess to make toast");
 				currentMakeToastTask.set(executor.submit(new MakeToastTask(
 						input, futureResult)));
 			}
 
 			@Override
 			public void onFailure(final Throwable ex) {
+				LOG.debug("onFailure to make toast");
 				if (ex instanceof OptimisticLockFailedException) {
 
 					// Another thread is likely trying to make toast
@@ -401,7 +413,7 @@ public class ToasterProvider implements BindingAwareProvider, ToasterService, Au
 	          {
 	              // make toast just sleeps for n seconds.
 	              long darknessFactor = ToasterProvider.this.darknessFactor.get();
-	              Thread.sleep(toastRequest.getToasterDoneness());
+	              Thread.sleep(darknessFactor * toastRequest.getToasterDoneness());
 	          }
 	          catch( InterruptedException e ) {
 	              LOG.info( "Interrupted while making the toast" );
@@ -436,4 +448,47 @@ public class ToasterProvider implements BindingAwareProvider, ToasterService, Au
 	          return null;
 	     }
 	}
+
+	@Override
+	public void onDataChanged(
+			AsyncDataChangeEvent<InstanceIdentifier<?>, DataObject> change) {
+		DataObject dataObject = change.getUpdatedSubtree();
+		if (dataObject instanceof Toaster) {
+			
+			Toaster toaster = (Toaster) dataObject;
+			Long darkness = toaster.getDarknessFactor();
+			if (darkness != null) {
+				darknessFactor.set(darkness);
+			}
+		}
+
+	}
+	
+	/**
+     * Populates toaster's default config data into the MD-SAL configuration
+     * data store.
+     */
+    private void initToasterConfiguration() {
+        // Build the default toaster config data
+        Toaster toaster = new ToasterBuilder().setDarknessFactor(darknessFactor.get())
+                .build();
+
+        // Place default config data in data store tree
+        WriteTransaction tx = dataService.newWriteOnlyTransaction();
+        tx.put(LogicalDatastoreType.CONFIGURATION, TOASTER_IID, toaster);
+
+        Futures.addCallback(tx.submit(), new FutureCallback<Void>() {
+            @Override
+            public void onSuccess(final Void result) {
+                LOG.info("initToasterConfiguration: transaction succeeded");
+            }
+
+            @Override
+            public void onFailure(final Throwable t) {
+                LOG.error("initToasterConfiguration: transaction failed");
+            }
+        });
+
+        LOG.info("initToasterConfiguration: default config populated: {}", toaster);
+    }
 }
