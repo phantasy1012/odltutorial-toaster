@@ -20,9 +20,8 @@ public class ToasterModule extends org.opendaylight.yang.gen.v1.urn.opendaylight
     @Override
     public java.lang.AutoCloseable createInstance() {
     	final ToasterProvider provider = new ToasterProvider();
-    	
-    	DataBroker dataBrokerService = getDataBrokerDependency();
-    	provider.setDataProvider(dataBrokerService);
+    	//DataBroker dataBrokerService = getDataBrokerDependency();
+    	//provider.setDataProvider(dataBrokerService);
     	
     	getBrokerDependency().registerProvider(provider);
 //    	return provider;
