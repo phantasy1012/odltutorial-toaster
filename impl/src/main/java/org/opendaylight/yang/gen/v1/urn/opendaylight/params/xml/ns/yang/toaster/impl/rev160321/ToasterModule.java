@@ -27,7 +27,11 @@ public class ToasterModule extends org.opendaylight.yang.gen.v1.urn.opendaylight
     	LOG.info("Creating a new Toaster instance");
     	final ToasterProvider provider = new ToasterProvider();
     	getBrokerDependency().registerProvider(provider);
-    	return provider;
+    	
+    	// Register runtimeBean for toaster statistics via JMX
+        final ToasterRuntimeRegistration runtimeReg = getRootRuntimeBeanRegistratorWrapper().register( provider);
+        
+    	return runtimeReg;
     }
 
 }

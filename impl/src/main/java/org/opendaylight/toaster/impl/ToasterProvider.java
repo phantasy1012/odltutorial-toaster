@@ -18,6 +18,9 @@ import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
+
+
+
 //MD-SAL APIs
 import org.opendaylight.controller.md.sal.binding.api.DataBroker;
 import org.opendaylight.controller.md.sal.binding.api.DataChangeListener;
@@ -32,6 +35,8 @@ import org.opendaylight.controller.sal.binding.api.BindingAwareBroker.ProviderCo
 import org.opendaylight.controller.sal.binding.api.BindingAwareBroker.RpcRegistration;
 import org.opendaylight.controller.sal.binding.api.BindingAwareProvider;
 import org.opendaylight.controller.sal.binding.api.NotificationProviderService;
+import org.opendaylight.yang.gen.v1.urn.opendaylight.params.xml.ns.yang.toaster.impl.rev160321.ToasterRuntimeMXBean;
+import org.opendaylight.yang.gen.v1.urn.opendaylight.params.xml.ns.yang.toaster.impl.rev160321.ToasterRuntimeRegistration;
 //Interfaces generated from the toaster yang model
 import org.opendaylight.yang.gen.v1.urn.opendaylight.params.xml.ns.yang.toaster.rev160320.DisplayString;
 import org.opendaylight.yang.gen.v1.urn.opendaylight.params.xml.ns.yang.toaster.rev160320.MakeToastInput;
@@ -51,6 +56,9 @@ import org.opendaylight.yangtools.yang.common.RpcResultBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+
+
+
 //
 import com.google.common.base.Function;
 import com.google.common.base.Optional;
@@ -60,7 +68,7 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 
-public class ToasterProvider implements BindingAwareProvider, ToasterService, AutoCloseable, DataChangeListener {
+public class ToasterProvider implements BindingAwareProvider, ToasterService, AutoCloseable, DataChangeListener, ToasterRuntimeMXBean {
 	private static final Logger LOG = LoggerFactory
 			.getLogger(ToasterProvider.class);
 
@@ -87,6 +95,7 @@ public class ToasterProvider implements BindingAwareProvider, ToasterService, Au
 
 	private final AtomicLong amountOfBreadInStock = new AtomicLong(100);
 
+	// 用来去跟踪计数和获得计数
 	private final AtomicLong toastsMade = new AtomicLong(0);
 
 	// Thread safe holder for our darkness multiplier.
@@ -419,7 +428,7 @@ public class ToasterProvider implements BindingAwareProvider, ToasterService, Au
 	              LOG.info( "Interrupted while making the toast" );
 	          }
 	 
-	          toastsMade.incrementAndGet();
+	          toastsMade.incrementAndGet();//跟踪计数
 	 
 	          amountOfBreadInStock.getAndDecrement();
 	          if( outOfBread() ) {
@@ -491,4 +500,15 @@ public class ToasterProvider implements BindingAwareProvider, ToasterService, Au
 
         LOG.info("initToasterConfiguration: default config populated: {}", toaster);
     }
+
+	@Override
+	public Long getToastsMade() {
+		return toastsMade.get();
+	}
+
+	@Override
+	public void clearToastsMade() {
+		LOG.info("clearToastsMade");
+		toastsMade.set(0);
+	}
 }
