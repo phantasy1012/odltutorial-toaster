@@ -11,12 +11,19 @@ package org.opendaylight.toaster.impl;
 //In Eclipse, use CONTROL+SHIFT+o or CMD+SHIFT+o (mac) to properly order imports
 
 //3rd party imports
+import java.util.Collections;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+
+
+
+
+
+
 
 
 
@@ -35,14 +42,19 @@ import org.opendaylight.controller.sal.binding.api.BindingAwareBroker.ProviderCo
 import org.opendaylight.controller.sal.binding.api.BindingAwareBroker.RpcRegistration;
 import org.opendaylight.controller.sal.binding.api.BindingAwareProvider;
 import org.opendaylight.controller.sal.binding.api.NotificationProviderService;
+import org.opendaylight.controller.sal.common.util.Rpcs;
 import org.opendaylight.yang.gen.v1.urn.opendaylight.params.xml.ns.yang.toaster.impl.rev160321.ToasterRuntimeMXBean;
 import org.opendaylight.yang.gen.v1.urn.opendaylight.params.xml.ns.yang.toaster.impl.rev160321.ToasterRuntimeRegistration;
 //Interfaces generated from the toaster yang model
 import org.opendaylight.yang.gen.v1.urn.opendaylight.params.xml.ns.yang.toaster.rev160320.DisplayString;
 import org.opendaylight.yang.gen.v1.urn.opendaylight.params.xml.ns.yang.toaster.rev160320.MakeToastInput;
+import org.opendaylight.yang.gen.v1.urn.opendaylight.params.xml.ns.yang.toaster.rev160320.RestockToasterInput;
 import org.opendaylight.yang.gen.v1.urn.opendaylight.params.xml.ns.yang.toaster.rev160320.Toaster;
 import org.opendaylight.yang.gen.v1.urn.opendaylight.params.xml.ns.yang.toaster.rev160320.Toaster.ToasterStatus;
 import org.opendaylight.yang.gen.v1.urn.opendaylight.params.xml.ns.yang.toaster.rev160320.ToasterBuilder;
+import org.opendaylight.yang.gen.v1.urn.opendaylight.params.xml.ns.yang.toaster.rev160320.ToasterOutOfBreadBuilder;
+import org.opendaylight.yang.gen.v1.urn.opendaylight.params.xml.ns.yang.toaster.rev160320.ToasterRestocked;
+import org.opendaylight.yang.gen.v1.urn.opendaylight.params.xml.ns.yang.toaster.rev160320.ToasterRestockedBuilder;
 import org.opendaylight.yang.gen.v1.urn.opendaylight.params.xml.ns.yang.toaster.rev160320.ToasterService;
 //Yangtools methods to manipulate RPC DTOs
 import org.opendaylight.yangtools.concepts.ListenerRegistration;
@@ -55,6 +67,12 @@ import org.opendaylight.yangtools.yang.common.RpcResultBuilder;
 //
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+
+
+
+
+
 
 
 
@@ -72,9 +90,11 @@ public class ToasterProvider implements BindingAwareProvider, ToasterService, Au
 	private static final Logger LOG = LoggerFactory
 			.getLogger(ToasterProvider.class);
 
+	private NotificationProviderService notificationService;//
+	private final AtomicLong amountOfBreadInStock = new AtomicLong(100);
+	
 	private ProviderContext providerContext;
 
-	private NotificationProviderService notificationService;
 	private DataBroker dataService;
 
 	private RpcRegistration<ToasterService> rpcReg;
@@ -93,8 +113,6 @@ public class ToasterProvider implements BindingAwareProvider, ToasterService, Au
 	// This is used to cancel the current toast.
 	private final AtomicReference<Future<?>> currentMakeToastTask = new AtomicReference<>();
 
-	private final AtomicLong amountOfBreadInStock = new AtomicLong(100);
-
 	// 用来去跟踪计数和获得计数
 	private final AtomicLong toastsMade = new AtomicLong(0);
 
@@ -104,6 +122,11 @@ public class ToasterProvider implements BindingAwareProvider, ToasterService, Au
 	public ToasterProvider() {
 		executor = Executors.newFixedThreadPool(1);
 	}
+	
+	public void setNotificationProvider(NotificationProviderService salService) {
+		this.notificationService = salService;
+	}
+	
 
 	/**************************************************************************
 	 * AutoCloseable Method
@@ -290,10 +313,6 @@ public class ToasterProvider implements BindingAwareProvider, ToasterService, Au
 		});
 	}
 
-	private boolean outOfBread() {
-		return amountOfBreadInStock.get() == 0;
-	}
-
 	/**
 	 * Read the ToasterStatus and, if currently Up, try to write the status to
 	 * Down. If that succeeds, then we essentially have an exclusive lock and
@@ -430,11 +449,11 @@ public class ToasterProvider implements BindingAwareProvider, ToasterService, Au
 	 
 	          toastsMade.incrementAndGet();//跟踪计数
 	 
-	          amountOfBreadInStock.getAndDecrement();
-	          if( outOfBread() ) {
-	              LOG.info( "Toaster is out of bread!" );
+	          amountOfBreadInStock.getAndDecrement();//
+	          if( outOfBread() ) {//
+	              LOG.info( "Toaster is out of bread!" );//
 	 
-	              //notificationService.publish( new ToasterOutOfBreadBuilder().build() );
+	              notificationService.publish( new ToasterOutOfBreadBuilder().build() );
 	          }
 	 
 	          // Set the Toaster status back to up - this essentially releases the toasting lock.
@@ -510,5 +529,24 @@ public class ToasterProvider implements BindingAwareProvider, ToasterService, Au
 	public void clearToastsMade() {
 		LOG.info("clearToastsMade");
 		toastsMade.set(0);
+	}
+
+	@Override
+	public Future<RpcResult<Void>> restockToaster(RestockToasterInput input) {
+		LOG.info( "restockToaster: " + input );
+	       
+	       amountOfBreadInStock.set( input.getAmountOfBreadToStock() );
+	       
+	       if( amountOfBreadInStock.get() > 0 ) {
+	           ToasterRestocked reStockedNotification =
+	               new ToasterRestockedBuilder().setAmountOfBread( input.getAmountOfBreadToStock() ).build();
+	           notificationService.publish( reStockedNotification );
+	       }
+	       
+	       return Futures.immediateFuture(Rpcs.<Void> getRpcResult(true, Collections.<RpcError> emptySet()));
+	}
+	
+	private boolean outOfBread() {
+		return amountOfBreadInStock.get() == 0;
 	}
 }

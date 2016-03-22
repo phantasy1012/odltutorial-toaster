@@ -52,6 +52,16 @@ module toaster-impl {
                    }
                }
            }
+           
+           //Wire the toaster provider for notifications
+           container notification-service {
+               uses config:service-ref {
+                   refine type {
+                       mandatory true;
+                       config:required-identity md-sal-binding:binding-notification-service;
+                   }
+               }
+           }
         }
     }// end configuration
     
